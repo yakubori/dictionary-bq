@@ -1,0 +1,93 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+
+use constant CAP => 4;
+
+# ---------------------------------------------------------------------
+# Routines for sequences from words or their parts.
+# ---------------------------------------------------------------------
+sub process_sequences {
+  my $word = shift;
+  my $offset = length($word) - CAP;
+  
+  # Maintain uniqueness and order.
+  my $sequences = {};
+  my @sequences;
+  
+  for ( 0 .. $offset ) {
+    my $seq = substr($word, $_, CAP);
+    
+    if ( !exists($sequences->{$seq}) ) {
+      $sequences->{$seq} = 1;
+      push @sequences, $seq;
+    }
+  }
+
+  return @sequences;
+}
+
+# A word with one or more non-alpha characters must first be split.
+sub special_word {
+  my ($word, $char) = @_;
+  my @parts = split(/$char/, $word);
+  my @sequences;
+
+  foreach my $part (@parts) {
+    if ( length($part) >= CAP ) {
+      push @sequences, process_sequences($part);
+    }
+  }
+
+  return @sequences;
+}
+# ---------------------------------------------------------------------
+
+# File names.
+my $dictionary = 'dictionary.txt';
+my $words = 'words';
+my $sequences = 'sequences';
+
+# The dictionary file is small enough to keep in memory.
+die "Cannot read dictionary file: $!" unless -r $dictionary;
+
+open(my $dict_fh, '<', $dictionary) or die "Cannot open dictionary file: $!\n";
+my @lines = <$dict_fh>;
+close $dict_fh;
+
+chomp @lines;
+
+# File content data stores (reduce I/O; these are small data sets as well).
+my $word_content = "";
+my $sequence_content = "";
+
+# Process each word.
+foreach my $word (@lines) {
+  next unless length($word) >= CAP;
+
+  my @sequences;
+
+  if ( $word =~ /[^\w]+/ || $word =~ /\d+/ ) {
+    @sequences = special_word($word, $&);
+  } else {
+    @sequences = process_sequences($word);
+  }
+
+  # Only record words which return sequences.
+  if ( scalar(@sequences) >= 1 ) {
+    $word_content .= "$word\n" x scalar(@sequences);
+    $sequence_content .= join("\n", @sequences) . "\n";
+  }
+}
+
+# Write the words and sequences files.
+open(my $word_fh, '>', $words) or die "Cannot open words file: $!\n";
+print $word_fh $word_content;
+close $word_fh;
+
+open(my $seq_fh, '>', $sequences) or die "Cannot open sequences file:$!\n";
+print $seq_fh $sequence_content;
+close $seq_fh;
+
+exit 0;
